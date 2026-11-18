@@ -1,0 +1,275 @@
+import bcrypt from "bcrypt";
+import { NextFunction, Request, Response } from "express";
+import { StatusCodes } from "http-status-codes";
+import { UserService } from "./user.service";
+import catchAsync from "../../../shared/catchAsync";
+import sendResponse from "../../../shared/sendResponse";
+import config from "../../../config";
+import { STATUS } from "../../../enums/user";
+
+// register user
+const createUser = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const result = await UserService.createUserToDB(req.body);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.CREATED,
+      message: result.message,
+      data: result,
+    });
+  },
+);
+
+// register admin
+const createAdmin = catchAsync(async (req, res) => {
+  const userData = req.body;
+  const result = await UserService.createAdminToDB(userData);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Admin created successfully",
+    data: result,
+  });
+});
+
+const getAdmin = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserService.getAdminFromDB(req.query);
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: "Admin retrieved Successfully",
+    data: result,
+  });
+});
+
+const getSuperAdmin = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserService.getSuperAdminFromDB();
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: "Super admin retrieved successfully",
+    data: result,
+  });
+});
+
+const deleteAdmin = catchAsync(async (req: Request, res: Response) => {
+  const payload = req.params.id;
+  const result = await UserService.deleteAdminFromDB(payload);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: "Admin Deleted Successfully",
+    data: result,
+  });
+});
+
+// update profile
+const updateProfile = catchAsync(async (req, res) => {
+  const user: any = req.user;
+  if ("role" in req.body) {
+    delete req.body.role;
+  }
+  if (req.body.password) {
+    req.body.password = await bcrypt.hash(
+      req.body.password,
+      Number(config.bcrypt_salt_rounds),
+    );
+  }
+
+  const result = await UserService.updateProfileToDB(user, req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Profile updated successfully",
+    data: result,
+  });
+});
+
+const getUsers = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserService.getUsersFromDB(req.query);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: "Users retrieved successfully",
+    meta: result.meta,
+    stats: result.stats,
+    data: result.data,
+  });
+});
+
+const getUserById = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await UserService.getUserByIdFromDB(id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Successfully retrieve user by ID",
+    data: result,
+  });
+});
+
+const updateUserStatusById = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const status = (req.body?.status || STATUS.BANNED) as STATUS;
+
+  const result = await UserService.updateUserStatusByIdToDB(id, status);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Status updated successfully",
+    data: result,
+  });
+});
+
+const getClearances = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserService.getClearancesFromDB(req.query);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: "Clearances retrieved successfully",
+    meta: result.meta,
+    stats: result.counts,
+    data: result.data,
+  });
+});
+
+const updateApprovalStatusById = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { approvalStatus, rejectionReason } = req.body;
+
+  const result = await UserService.updateApprovalStatusByIdToDB(
+    id,
+    approvalStatus,
+    rejectionReason,
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: `Approval status updated to ${approvalStatus} successfully`,
+    data: result,
+  });
+});
+
+const updateAdminStatusById = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const result = await UserService.updateAdminStatusByIdToDB(id, status);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Admin status updated successfully",
+    data: result,
+  });
+});
+
+const deleteUserById = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const result = await UserService.deleteUserByIdFromD(id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "User is deleted successfully",
+    data: result,
+  });
+});
+
+const getMyProfile = catchAsync(async (req, res) => {
+  const { id: userId }: any = req.user;
+  const result = await UserService.getMyProfileFromDB(userId);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Profile data is retrieved successfully",
+    data: result,
+  });
+});
+
+const deleteProfile = catchAsync(async (req, res) => {
+  const { id }: any = req.user;
+  const { password } = req.body;
+
+  const result = await UserService.deleteProfileFromDB(id, password);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Profile deleted successfully",
+    data: result,
+  });
+});
+
+const addProjectPhoto = catchAsync(async (req, res) => {
+  const { id }: any = req.user;
+  const result = await UserService.addProjectPhotoToDB(id, req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.CREATED,
+    message: "Project photo added successfully",
+    data: result,
+  });
+});
+
+const updateProjectPhoto = catchAsync(async (req, res) => {
+  const { id }: any = req.user;
+  const { photoId } = req.params;
+  const result = await UserService.updateProjectPhotoToDB(
+    id,
+    photoId,
+    req.body,
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Project photo updated successfully",
+    data: result,
+  });
+});
+
+const deleteProjectPhoto = catchAsync(async (req, res) => {
+  const { id }: any = req.user;
+  const { photoId } = req.params;
+  const result = await UserService.deleteProjectPhotoFromDB(id, photoId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Project photo deleted successfully",
+    data: result,
+  });
+});
+
+export const UserController = {
+  createUser,
+  createAdmin,
+  getUsers,
+  getClearances,
+  getAdmin,
+  getSuperAdmin,
+  deleteAdmin,
+  updateProfile,
+  getUserById,
+  updateUserStatusById,
+  updateApprovalStatusById,
+  getMyProfile,
+  updateAdminStatusById,
+  deleteUserById,
+  deleteProfile,
+  addProjectPhoto,
+  updateProjectPhoto,
+  deleteProjectPhoto,
+};

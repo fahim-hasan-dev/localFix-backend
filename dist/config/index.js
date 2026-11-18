@@ -1,0 +1,81 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+var _a, _b;
+Object.defineProperty(exports, "__esModule", { value: true });
+const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
+dotenv_1.default.config({ path: path_1.default.join(process.cwd(), ".env") });
+exports.default = {
+    ip_address: process.env.IP,
+    port: process.env.PORT,
+    database_url: process.env.DATABASE_URL,
+    node_env: process.env.NODE_ENV,
+    bcrypt_salt_rounds: process.env.BCRYPT_SALT_ROUNDS,
+    jwt: {
+        jwt_secret: process.env.JWT_SECRET,
+        jwt_expire_in: process.env.JWT_EXPIRE_IN,
+        jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || process.env.jwtRefreshSecret,
+        jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || process.env.jwtRefreshExpiresIn,
+    },
+    redis_host: process.env.REDIS_HOST,
+    redis_port: process.env.REDIS_PORT,
+    redis_password: process.env.REDIS_PASSWORD,
+    redis_db: process.env.REDIS_DB,
+    start_cron: process.env.START_CRON,
+    client_url: process.env.CLIENT_URL,
+    // google login
+    firebase: {
+        serviceAccountBase64: process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+    },
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
+    datafast: {
+        baseUrl: process.env.DATAFAST_BASE_URL || "https://test.oppwa.com",
+        entityId: process.env.DATAFAST_ENTITY_ID || "8a8294185a65bf5e015a6c8b89a10d8d",
+        recurringEntityId: process.env.DATAFAST_RECURRING_ENTITY_ID ||
+            process.env.DATAFAST_ENTITY_ID ||
+            "8a8294185a65bf5e015a6c8b89a10d8d",
+        bearerToken: process.env.DATAFAST_BEARER_TOKEN ||
+            "OGE4Mjk0MTg1MzNjZjMxZDAxNTMzZDA2ZmQwNDA3NDh8WHQ3RjIyUUVOWA==",
+        mid: process.env.DATAFAST_MID || "1000000505",
+        tid: process.env.DATAFAST_TID || "PD100406",
+        eci: process.env.DATAFAST_ECI || "0103910",
+        pserv: process.env.DATAFAST_PSERV || "17913101",
+    },
+    email: {
+        from: process.env.EMAIL_FROM,
+        user: process.env.EMAIL_USER,
+        port: process.env.EMAIL_PORT,
+        host: process.env.EMAIL_HOST,
+        pass: process.env.EMAIL_PASS,
+    },
+    support_receiver_email: process.env.SUPPORT_RECEIVER_EMAIL,
+    admin: {
+        email: process.env.ADMIN_EMAIL,
+        password: process.env.ADMIN_PASSWORD,
+    },
+    twilio: {
+        accountSid: process.env.TWILIO_ACCOUNT_SID,
+        authToken: process.env.TWILIO_AUTH_TOKEN,
+        serviceSid: process.env.TWILIO_SERVICE_SID,
+    },
+    stripe: {
+        secretKey: process.env.STRIPE_SECRET_KEY,
+        webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    },
+    checkr: {
+        apiKey: process.env.CHECKR_API_KEY || "",
+        baseUrl: process.env.CHECKR_BASE_URL || "https://api.checkr.com",
+        signingKey: process.env.CHECKR_SIGNING_KEY || "",
+        backgroundCheckPackage: process.env.CHECKR_BACKGROUND_CHECK_PACKAGE || "tasker_standard",
+    },
+    currency: (process.env.CURRENCY || "usd").toLowerCase(),
+    currency_code: (process.env.CURRENCY || "USD").toUpperCase(),
+    currency_symbol: process.env.CURRENCY_SYMBOL ||
+        (((_a = process.env.CURRENCY) === null || _a === void 0 ? void 0 : _a.toLowerCase()) === "gbp"
+            ? "£"
+            : ((_b = process.env.CURRENCY) === null || _b === void 0 ? void 0 : _b.toLowerCase()) === "eur"
+                ? "€"
+                : "$"),
+};
