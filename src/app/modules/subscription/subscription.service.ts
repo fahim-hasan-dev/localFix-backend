@@ -15,6 +15,52 @@ import { Subscription } from "./subscription.model";
 import { getSubscriptionQuotationUsage } from "./subscription.helper";
 
 /**
+ * Reuse a stored Stripe customer only if it still exists in the current Stripe account.
+ * After cancel / key rotation / test↔live switches the old `cus_…` is often gone —
+ * creating checkout with it throws "No such customer".
+ */
+const resolveStripeCustomerId = async (
+  stripe: Stripe,
+  user: { _id: { toString(): string }; email?: string; name?: string; role?: string },
+  previousCustomerId?: string | null,
+): Promise<string> => {
+  if (previousCustomerId && previousCustomerId.startsWith("cus_")) {
+    try {
+      const existing = await stripe.customers.retrieve(previousCustomerId);
+      if (!("deleted" in existing && existing.deleted)) {
+        return existing.id;
+      }
+    } catch (err: any) {
+      const code = err?.code || err?.raw?.code;
+      const message = String(err?.message || "");
+      // Missing / wrong-mode customer → create a fresh one below
+      if (code !== "resource_missing" && !message.includes("No such customer")) {
+        throw err;
+      }
+    }
+  }
+
+  const customer = await stripe.customers.create({
+    email: user.email,
+    name: user.name,
+    metadata: {
+      userId: user._id.toString(),
+      role: user.role || "",
+    },
+  });
+
+  // Keep historical subscription rows in sync so portal / next checkout reuse this id
+  if (previousCustomerId && previousCustomerId !== customer.id) {
+    await Subscription.updateMany(
+      { userId: user._id, stripeCustomerId: previousCustomerId },
+      { $set: { stripeCustomerId: customer.id } },
+    );
+  }
+
+  return customer.id;
+};
+
+/**
  * Helper to ensure a Stripe Price exists for a Package and billingCycle/planType
  */
 const getOrCreateStripePrice = async (
@@ -138,25 +184,15 @@ const createCheckoutSession = async (
     planType,
   );
 
-  // Find or Create Stripe Customer
-  let stripeCustomerId: string | undefined;
+  // Find or create Stripe customer (validate stored id — may be deleted after cancel / key change)
   const previousSub = await Subscription.findOne({ userId }).sort({
     createdAt: -1,
   });
-
-  if (previousSub?.stripeCustomerId) {
-    stripeCustomerId = previousSub.stripeCustomerId;
-  } else {
-    const customer = await stripe.customers.create({
-      email: user.email,
-      name: user.name,
-      metadata: {
-        userId: user._id.toString(),
-        role: user.role,
-      },
-    });
-    stripeCustomerId = customer.id;
-  }
+  const stripeCustomerId = await resolveStripeCustomerId(
+    stripe,
+    user,
+    previousSub?.stripeCustomerId,
+  );
 
   // Prevent multiple free trials for the same user
   const hadPreviousTrial = await Subscription.findOne({
@@ -550,21 +586,32 @@ const getMySubscriptionFromDB = async (userId: string) => {
 const createCustomerPortalSession = async (userId: string) => {
   const stripe = getStripe();
 
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
+  }
+
   const subscription = await Subscription.findOne({ userId }).sort({
     createdAt: -1,
   });
 
-  if (!subscription || !subscription.stripeCustomerId) {
+  if (!subscription) {
     throw new ApiError(
       StatusCodes.NOT_FOUND,
-      "No active Stripe customer found for this account",
+      "No subscription history found for this account",
     );
   }
+
+  const stripeCustomerId = await resolveStripeCustomerId(
+    stripe,
+    user,
+    subscription.stripeCustomerId,
+  );
 
   const clientUrl = config.client_url || "http://localhost:3000";
 
   const portalSession = await stripe.billingPortal.sessions.create({
-    customer: subscription.stripeCustomerId,
+    customer: stripeCustomerId,
     return_url: `${clientUrl}/dashboard`,
   });
 

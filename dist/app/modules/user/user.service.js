@@ -432,13 +432,13 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
     const joinedDate = `Joined ${formatDisplayDate(user.createdAt)}`;
     const location = [user.city, user.state, user.zipCode].filter(Boolean).join(", ") ||
         user.streetAddress ||
-        "Austin, TX 78701";
+        "";
     // Common Header Info
     const header = {
         _id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone || "(512) 555-0142",
+        name: user.name || "",
+        email: user.email || "",
+        phone: user.phone || "",
         countryCode: user.countryCode || "+1",
         profileImage: user.profileImage || "",
         gender: user.gender,
@@ -449,9 +449,9 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
         isBanned,
         joinedDate,
         location,
-        city: user.city || "Austin",
-        state: user.state || "TX",
-        zipCode: user.zipCode || "78701",
+        city: user.city || "",
+        state: user.state || "",
+        zipCode: user.zipCode || "",
         streetAddress: user.streetAddress || "",
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -495,12 +495,14 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
         ]);
         const lifetimeJobs = totalBookingsCount > 0
             ? totalBookingsCount
-            : user.completedJobs || user.localJobs || 45;
+            : user.completedJobs || user.localJobs || 0;
         const completedJobs = completedBookingsCount > 0
             ? completedBookingsCount
-            : user.completedJobs || 2;
-        const disputes = disputedBookingsCount + relatedTicketsCount || 1;
+            : user.completedJobs || 0;
+        const disputes = disputedBookingsCount + relatedTicketsCount;
         // Stat Cards
+        const averageRating = reviewSummary.averageRating || 0;
+        const totalReviews = reviewSummary.totalReviews || 0;
         const statCards = [
             {
                 key: "lifetime_jobs",
@@ -520,10 +522,10 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
             {
                 key: "customer_rating",
                 label: "CUSTOMER RATING",
-                value: reviewSummary.averageRating || 4.9,
-                subtext: `(${reviewSummary.totalReviews || 81} reviews)`,
-                rating: reviewSummary.averageRating || 4.9,
-                totalReviews: reviewSummary.totalReviews || 81,
+                value: averageRating,
+                subtext: `(${totalReviews} reviews)`,
+                rating: averageRating,
+                totalReviews,
             },
         ];
         // Tab 1: Profile & Operational Details
@@ -576,15 +578,18 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
             { day: "Saturday", hours: "9:00 AM - 2:00 PM" },
             { day: "Sunday", hours: "Closed (Emergency Only)" },
         ];
+        const territoryParts = [user.city, user.state, user.zipCode].filter(Boolean);
         const profileOperationalDetails = {
-            about: user.about ||
-                "Master plumbing specialist serving Austin, TX 78701 and surrounding communities for 12+ years. Specializing in whole-home repiping, tankless water heater conversions, sewer line hydro-jetting, and slab leak detection. Licensed, insured, and verified.",
+            about: user.about || "",
             isVerifiedPro: user.approvalStatus === user_1.APPROVAL_STATUS.APPROVED ||
-                Boolean((_u = user.tradeLicense) === null || _u === void 0 ? void 0 : _u.isVerified) ||
-                true,
+                Boolean((_u = user.tradeLicense) === null || _u === void 0 ? void 0 : _u.isVerified),
             credentialsHighlights,
-            tradeSpecialty: ((_v = user.category) === null || _v === void 0 ? void 0 : _v.name) || user.companyName || "Master Plumber",
-            serviceTerritory: `${user.city || "Austin"}, ${user.state || "TX"} ${user.zipCode || "78701"} (<${user.serviceRadiusInMiles || 25} mi radius)`,
+            tradeSpecialty: ((_v = user.category) === null || _v === void 0 ? void 0 : _v.name) || user.companyName || "",
+            serviceTerritory: territoryParts.length
+                ? `${territoryParts.join(", ")}${user.serviceRadiusInMiles
+                    ? ` (<${user.serviceRadiusInMiles} mi radius)`
+                    : ""}`
+                : "",
             membershipPlan: membershipPlanName,
             businessHours: {
                 badge: "Open today",
@@ -593,8 +598,8 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
                 raw: user.businessHours,
             },
             operationalMetrics: {
-                responseSpeed: user.responseTime || "Under 15 mins",
-                availability: user.availability || "Available this week",
+                responseSpeed: user.responseTime || "",
+                availability: user.availability || "",
                 dispatchStatus: ((_w = user.businessHours) === null || _w === void 0 ? void 0 : _w.emergencyDispatchAvailable) !== false
                     ? "Accepting Leads"
                     : "Unavailable",
@@ -615,11 +620,11 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
             backgroundCheck: backgroundCheckInfo,
         };
         // Tab 4: Reviews & Ratings (Screenshot 3)
-        const fiveStarPct = (_z = (_y = (_x = reviewSummary.ratingBreakdown) === null || _x === void 0 ? void 0 : _x[5]) === null || _y === void 0 ? void 0 : _y.percentage) !== null && _z !== void 0 ? _z : 96;
-        const fourStarPct = (_2 = (_1 = (_0 = reviewSummary.ratingBreakdown) === null || _0 === void 0 ? void 0 : _0[4]) === null || _1 === void 0 ? void 0 : _1.percentage) !== null && _2 !== void 0 ? _2 : 3;
+        const fiveStarPct = (_z = (_y = (_x = reviewSummary.ratingBreakdown) === null || _x === void 0 ? void 0 : _x[5]) === null || _y === void 0 ? void 0 : _y.percentage) !== null && _z !== void 0 ? _z : 0;
+        const fourStarPct = (_2 = (_1 = (_0 = reviewSummary.ratingBreakdown) === null || _0 === void 0 ? void 0 : _0[4]) === null || _1 === void 0 ? void 0 : _1.percentage) !== null && _2 !== void 0 ? _2 : 0;
         const lessThreePct = ((_5 = (_4 = (_3 = reviewSummary.ratingBreakdown) === null || _3 === void 0 ? void 0 : _3[3]) === null || _4 === void 0 ? void 0 : _4.percentage) !== null && _5 !== void 0 ? _5 : 0) +
             ((_8 = (_7 = (_6 = reviewSummary.ratingBreakdown) === null || _6 === void 0 ? void 0 : _6[2]) === null || _7 === void 0 ? void 0 : _7.percentage) !== null && _8 !== void 0 ? _8 : 0) +
-            ((_11 = (_10 = (_9 = reviewSummary.ratingBreakdown) === null || _9 === void 0 ? void 0 : _9[1]) === null || _10 === void 0 ? void 0 : _10.percentage) !== null && _11 !== void 0 ? _11 : 0) || 1;
+            ((_11 = (_10 = (_9 = reviewSummary.ratingBreakdown) === null || _9 === void 0 ? void 0 : _9[1]) === null || _10 === void 0 ? void 0 : _10.percentage) !== null && _11 !== void 0 ? _11 : 0);
         const mappedReviews = reviewsList.map((r) => {
             var _a, _b;
             const homeowner = r.homeowner || {};
@@ -657,9 +662,9 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
         });
         const reviewsAndRatings = {
             summary: {
-                averageRating: reviewSummary.averageRating || 4.9,
-                totalReviews: reviewSummary.totalReviews || mappedReviews.length || 81,
-                verifiedEvaluationsText: `Based on ${reviewSummary.totalReviews || mappedReviews.length || 81} homeowner evaluations`,
+                averageRating: reviewSummary.averageRating || 0,
+                totalReviews: reviewSummary.totalReviews || mappedReviews.length || 0,
+                verifiedEvaluationsText: `Based on ${reviewSummary.totalReviews || mappedReviews.length || 0} homeowner evaluations`,
                 directServiceVerified: "100% Direct Service Verified",
                 starBreakdown: {
                     fiveStars: fiveStarPct,
@@ -758,11 +763,9 @@ const getUserByIdFromDB = (id) => __awaiter(void 0, void 0, void 0, function* ()
     ]);
     const totalOrders = totalOrdersCount > 0
         ? totalOrdersCount
-        : homeownerJobRequests.length > 0
-            ? homeownerJobRequests.length
-            : 6;
-    const completedOrders = completedOrdersCount > 0 ? completedOrdersCount : 1;
-    const disputesAndClaims = disputedOrdersCount + homeownerTicketsCount || 2;
+        : homeownerJobRequests.length;
+    const completedOrders = completedOrdersCount;
+    const disputesAndClaims = disputedOrdersCount + homeownerTicketsCount;
     const statCards = [
         {
             key: "total_orders",

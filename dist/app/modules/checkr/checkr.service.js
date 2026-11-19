@@ -34,8 +34,31 @@ const ensureCheckrConfigured = () => {
         throw new ApiErrors_1.default(http_status_codes_1.StatusCodes.INTERNAL_SERVER_ERROR, "Checkr API key is not configured");
     }
 };
+/**
+ * Checkr only accepts letters, numbers, spaces, hyphens, apostrophes, periods, and commas
+ * in name fields. Strip everything else (emoji, underscores, unicode scripts Checkr rejects, etc.).
+ */
+const sanitizeCheckrNamePart = (value) => {
+    return value
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "") // strip combining diacritics after NFKD
+        .replace(/[^\p{L}\p{N}\s\-'.]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+};
+const isValidCheckrNamePart = (value) => {
+    if (!value || value.length < 1 || value.length > 100)
+        return false;
+    // Must contain at least one letter; Checkr rejects digit-only / punctuation-only names.
+    if (!/\p{L}/u.test(value))
+        return false;
+    return /^[\p{L}\p{N}\s\-'.]+$/u.test(value);
+};
 const splitFullName = (fullName) => {
-    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    const parts = sanitizeCheckrNamePart(fullName)
+        .split(/\s+/)
+        .map((part) => sanitizeCheckrNamePart(part))
+        .filter(Boolean);
     if (parts.length === 0) {
         return {
             first_name: "Professional",
@@ -44,16 +67,46 @@ const splitFullName = (fullName) => {
         };
     }
     if (parts.length === 1) {
-        return { first_name: parts[0], last_name: parts[0], no_middle_name: true };
+        const only = parts[0];
+        return {
+            first_name: only,
+            last_name: only,
+            no_middle_name: true,
+        };
     }
     if (parts.length === 2) {
-        return { first_name: parts[0], last_name: parts[1], no_middle_name: true };
+        return {
+            first_name: parts[0],
+            last_name: parts[1],
+            no_middle_name: true,
+        };
     }
     return {
         first_name: parts[0],
         middle_name: parts.slice(1, -1).join(" "),
         last_name: parts[parts.length - 1],
+        no_middle_name: false,
     };
+};
+/** Digits-only US phone for Checkr (optional field). */
+const sanitizeCheckrPhone = (phone) => {
+    if (!phone)
+        return undefined;
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length === 10)
+        return digits;
+    if (digits.length === 11 && digits.startsWith("1"))
+        return digits.slice(1);
+    // Keep E.164-ish if already long enough; otherwise omit rather than fail candidate create.
+    if (digits.length >= 10 && digits.length <= 15)
+        return digits;
+    return undefined;
+};
+const sanitizeCheckrZip = (zip) => {
+    if (!zip)
+        return undefined;
+    const match = zip.trim().match(/\b(\d{5})(?:-\d{4})?\b/);
+    return match === null || match === void 0 ? void 0 : match[1];
 };
 const buildWorkLocations = (state, city) => {
     const stateCode = (0, checkr_constant_1.normalizeUsStateCode)(state);
@@ -77,13 +130,26 @@ const extractCheckrErrorMessage = (error) => {
 };
 /**
  * Create a Checkr candidate for a service professional (hosted screening flow).
+ * Invitation flow only strictly requires email — names are included when valid.
  */
 const createCandidate = (candidateData) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d;
     ensureCheckrConfigured();
-    const { first_name, middle_name, last_name, no_middle_name } = splitFullName(candidateData.name);
-    const payload = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({ first_name,
-        last_name, email: candidateData.email }, (middle_name ? { middle_name } : { no_middle_name })), (candidateData.phone ? { phone: candidateData.phone } : {})), (candidateData.zipcode ? { zipcode: candidateData.zipcode } : {})), (candidateData.custom_id ? { custom_id: candidateData.custom_id } : {})), (((_a = candidateData.work_locations) === null || _a === void 0 ? void 0 : _a.length)
+    const split = splitFullName(candidateData.name);
+    const firstName = isValidCheckrNamePart(split.first_name)
+        ? split.first_name
+        : "";
+    const lastName = isValidCheckrNamePart(split.last_name)
+        ? split.last_name
+        : "";
+    const middleName = split.middle_name && isValidCheckrNamePart(split.middle_name)
+        ? split.middle_name
+        : undefined;
+    const phone = sanitizeCheckrPhone(candidateData.phone);
+    const zipcode = sanitizeCheckrZip(candidateData.zipcode);
+    // Hosted invitation: email alone is enough. Only send names Checkr will accept.
+    const payload = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({ email: candidateData.email.trim().toLowerCase() }, (firstName && lastName
+        ? Object.assign({ first_name: firstName, last_name: lastName }, (middleName ? { middle_name: middleName } : { no_middle_name: true })) : {})), (phone ? { phone } : {})), (zipcode ? { zipcode } : {})), (candidateData.custom_id ? { custom_id: candidateData.custom_id } : {})), (((_a = candidateData.work_locations) === null || _a === void 0 ? void 0 : _a.length)
         ? { work_locations: candidateData.work_locations }
         : {}));
     try {
@@ -94,6 +160,13 @@ const createCandidate = (candidateData) => __awaiter(void 0, void 0, void 0, fun
         console.error("Checkr Candidate Creation Failed:", {
             status: (_b = error.response) === null || _b === void 0 ? void 0 : _b.status,
             error: ((_c = error.response) === null || _c === void 0 ? void 0 : _c.data) || error.message,
+            payload: {
+                email: payload.email,
+                first_name: payload.first_name,
+                last_name: payload.last_name,
+                phone: payload.phone,
+                zipcode: payload.zipcode,
+            },
         });
         throw new ApiErrors_1.default(((_d = error.response) === null || _d === void 0 ? void 0 : _d.status) || http_status_codes_1.StatusCodes.BAD_GATEWAY, extractCheckrErrorMessage(error));
     }

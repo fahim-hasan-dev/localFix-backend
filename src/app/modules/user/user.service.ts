@@ -554,14 +554,14 @@ const getUserByIdFromDB = async (id: string) => {
   const location =
     [user.city, user.state, user.zipCode].filter(Boolean).join(", ") ||
     user.streetAddress ||
-    "Austin, TX 78701";
+    "";
 
   // Common Header Info
   const header = {
     _id: user._id,
-    name: user.name,
-    email: user.email,
-    phone: user.phone || "(512) 555-0142",
+    name: user.name || "",
+    email: user.email || "",
+    phone: user.phone || "",
     countryCode: user.countryCode || "+1",
     profileImage: user.profileImage || "",
     gender: user.gender,
@@ -572,9 +572,9 @@ const getUserByIdFromDB = async (id: string) => {
     isBanned,
     joinedDate,
     location,
-    city: user.city || "Austin",
-    state: user.state || "TX",
-    zipCode: user.zipCode || "78701",
+    city: user.city || "",
+    state: user.state || "",
+    zipCode: user.zipCode || "",
     streetAddress: user.streetAddress || "",
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -631,14 +631,16 @@ const getUserByIdFromDB = async (id: string) => {
     const lifetimeJobs =
       totalBookingsCount > 0
         ? totalBookingsCount
-        : user.completedJobs || user.localJobs || 45;
+        : user.completedJobs || user.localJobs || 0;
     const completedJobs =
       completedBookingsCount > 0
         ? completedBookingsCount
-        : user.completedJobs || 2;
-    const disputes = disputedBookingsCount + relatedTicketsCount || 1;
+        : user.completedJobs || 0;
+    const disputes = disputedBookingsCount + relatedTicketsCount;
 
     // Stat Cards
+    const averageRating = reviewSummary.averageRating || 0;
+    const totalReviews = reviewSummary.totalReviews || 0;
     const statCards = [
       {
         key: "lifetime_jobs",
@@ -658,10 +660,10 @@ const getUserByIdFromDB = async (id: string) => {
       {
         key: "customer_rating",
         label: "CUSTOMER RATING",
-        value: reviewSummary.averageRating || 4.9,
-        subtext: `(${reviewSummary.totalReviews || 81} reviews)`,
-        rating: reviewSummary.averageRating || 4.9,
-        totalReviews: reviewSummary.totalReviews || 81,
+        value: averageRating,
+        subtext: `(${totalReviews} reviews)`,
+        rating: averageRating,
+        totalReviews,
       },
     ];
 
@@ -731,18 +733,22 @@ const getUserByIdFromDB = async (id: string) => {
       { day: "Sunday", hours: "Closed (Emergency Only)" },
     ];
 
+    const territoryParts = [user.city, user.state, user.zipCode].filter(Boolean);
     const profileOperationalDetails = {
-      about:
-        user.about ||
-        "Master plumbing specialist serving Austin, TX 78701 and surrounding communities for 12+ years. Specializing in whole-home repiping, tankless water heater conversions, sewer line hydro-jetting, and slab leak detection. Licensed, insured, and verified.",
+      about: user.about || "",
       isVerifiedPro:
         user.approvalStatus === APPROVAL_STATUS.APPROVED ||
-        Boolean(user.tradeLicense?.isVerified) ||
-        true,
+        Boolean(user.tradeLicense?.isVerified),
       credentialsHighlights,
       tradeSpecialty:
-        (user.category as any)?.name || user.companyName || "Master Plumber",
-      serviceTerritory: `${user.city || "Austin"}, ${user.state || "TX"} ${user.zipCode || "78701"} (<${user.serviceRadiusInMiles || 25} mi radius)`,
+        (user.category as any)?.name || user.companyName || "",
+      serviceTerritory: territoryParts.length
+        ? `${territoryParts.join(", ")}${
+            user.serviceRadiusInMiles
+              ? ` (<${user.serviceRadiusInMiles} mi radius)`
+              : ""
+          }`
+        : "",
       membershipPlan: membershipPlanName,
       businessHours: {
         badge: "Open today",
@@ -751,8 +757,8 @@ const getUserByIdFromDB = async (id: string) => {
         raw: user.businessHours,
       },
       operationalMetrics: {
-        responseSpeed: user.responseTime || "Under 15 mins",
-        availability: user.availability || "Available this week",
+        responseSpeed: user.responseTime || "",
+        availability: user.availability || "",
         dispatchStatus:
           user.businessHours?.emergencyDispatchAvailable !== false
             ? "Accepting Leads"
@@ -777,12 +783,12 @@ const getUserByIdFromDB = async (id: string) => {
     };
 
     // Tab 4: Reviews & Ratings (Screenshot 3)
-    const fiveStarPct = reviewSummary.ratingBreakdown?.[5]?.percentage ?? 96;
-    const fourStarPct = reviewSummary.ratingBreakdown?.[4]?.percentage ?? 3;
+    const fiveStarPct = reviewSummary.ratingBreakdown?.[5]?.percentage ?? 0;
+    const fourStarPct = reviewSummary.ratingBreakdown?.[4]?.percentage ?? 0;
     const lessThreePct =
       (reviewSummary.ratingBreakdown?.[3]?.percentage ?? 0) +
       (reviewSummary.ratingBreakdown?.[2]?.percentage ?? 0) +
-      (reviewSummary.ratingBreakdown?.[1]?.percentage ?? 0) || 1;
+      (reviewSummary.ratingBreakdown?.[1]?.percentage ?? 0);
 
     const mappedReviews = reviewsList.map((r: any) => {
       const homeowner = r.homeowner || {};
@@ -824,10 +830,11 @@ const getUserByIdFromDB = async (id: string) => {
 
     const reviewsAndRatings = {
       summary: {
-        averageRating: reviewSummary.averageRating || 4.9,
-        totalReviews:
-          reviewSummary.totalReviews || mappedReviews.length || 81,
-        verifiedEvaluationsText: `Based on ${reviewSummary.totalReviews || mappedReviews.length || 81} homeowner evaluations`,
+        averageRating: reviewSummary.averageRating || 0,
+        totalReviews: reviewSummary.totalReviews || mappedReviews.length || 0,
+        verifiedEvaluationsText: `Based on ${
+          reviewSummary.totalReviews || mappedReviews.length || 0
+        } homeowner evaluations`,
         directServiceVerified: "100% Direct Service Verified",
         starBreakdown: {
           fiveStars: fiveStarPct,
@@ -940,13 +947,9 @@ const getUserByIdFromDB = async (id: string) => {
   const totalOrders =
     totalOrdersCount > 0
       ? totalOrdersCount
-      : homeownerJobRequests.length > 0
-        ? homeownerJobRequests.length
-        : 6;
-  const completedOrders =
-    completedOrdersCount > 0 ? completedOrdersCount : 1;
-  const disputesAndClaims =
-    disputedOrdersCount + homeownerTicketsCount || 2;
+      : homeownerJobRequests.length;
+  const completedOrders = completedOrdersCount;
+  const disputesAndClaims = disputedOrdersCount + homeownerTicketsCount;
 
   const statCards = [
     {

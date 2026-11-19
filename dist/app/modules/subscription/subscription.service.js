@@ -26,6 +26,43 @@ const user_model_1 = require("../user/user.model");
 const subscription_model_1 = require("./subscription.model");
 const subscription_helper_1 = require("./subscription.helper");
 /**
+ * Reuse a stored Stripe customer only if it still exists in the current Stripe account.
+ * After cancel / key rotation / test↔live switches the old `cus_…` is often gone —
+ * creating checkout with it throws "No such customer".
+ */
+const resolveStripeCustomerId = (stripe, user, previousCustomerId) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    if (previousCustomerId && previousCustomerId.startsWith("cus_")) {
+        try {
+            const existing = yield stripe.customers.retrieve(previousCustomerId);
+            if (!("deleted" in existing && existing.deleted)) {
+                return existing.id;
+            }
+        }
+        catch (err) {
+            const code = (err === null || err === void 0 ? void 0 : err.code) || ((_a = err === null || err === void 0 ? void 0 : err.raw) === null || _a === void 0 ? void 0 : _a.code);
+            const message = String((err === null || err === void 0 ? void 0 : err.message) || "");
+            // Missing / wrong-mode customer → create a fresh one below
+            if (code !== "resource_missing" && !message.includes("No such customer")) {
+                throw err;
+            }
+        }
+    }
+    const customer = yield stripe.customers.create({
+        email: user.email,
+        name: user.name,
+        metadata: {
+            userId: user._id.toString(),
+            role: user.role || "",
+        },
+    });
+    // Keep historical subscription rows in sync so portal / next checkout reuse this id
+    if (previousCustomerId && previousCustomerId !== customer.id) {
+        yield subscription_model_1.Subscription.updateMany({ userId: user._id, stripeCustomerId: previousCustomerId }, { $set: { stripeCustomerId: customer.id } });
+    }
+    return customer.id;
+});
+/**
  * Helper to ensure a Stripe Price exists for a Package and billingCycle/planType
  */
 const getOrCreateStripePrice = (stripe, pkg, planType) => __awaiter(void 0, void 0, void 0, function* () {
@@ -112,25 +149,11 @@ const createCheckoutSession = (userId, packageId, planType) => __awaiter(void 0,
         throw new ApiErrors_1.default(http_status_codes_1.StatusCodes.BAD_REQUEST, `You already have an active subscription (${(currentPkg === null || currentPkg === void 0 ? void 0 : currentPkg.name) || "Current Plan"}). To upgrade or switch your plan starting after your current period ends, please use the update-plan endpoint.`);
     }
     const priceId = yield getOrCreateStripePrice(stripe, selectedPackage, planType);
-    // Find or Create Stripe Customer
-    let stripeCustomerId;
+    // Find or create Stripe customer (validate stored id — may be deleted after cancel / key change)
     const previousSub = yield subscription_model_1.Subscription.findOne({ userId }).sort({
         createdAt: -1,
     });
-    if (previousSub === null || previousSub === void 0 ? void 0 : previousSub.stripeCustomerId) {
-        stripeCustomerId = previousSub.stripeCustomerId;
-    }
-    else {
-        const customer = yield stripe.customers.create({
-            email: user.email,
-            name: user.name,
-            metadata: {
-                userId: user._id.toString(),
-                role: user.role,
-            },
-        });
-        stripeCustomerId = customer.id;
-    }
+    const stripeCustomerId = yield resolveStripeCustomerId(stripe, user, previousSub === null || previousSub === void 0 ? void 0 : previousSub.stripeCustomerId);
     // Prevent multiple free trials for the same user
     const hadPreviousTrial = yield subscription_model_1.Subscription.findOne({
         userId,
@@ -447,15 +470,20 @@ const getMySubscriptionFromDB = (userId) => __awaiter(void 0, void 0, void 0, fu
 // ==========================================
 const createCustomerPortalSession = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     const stripe = (0, stripeHelper_1.getStripe)();
+    const user = yield user_model_1.User.findById(userId);
+    if (!user) {
+        throw new ApiErrors_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, "User not found");
+    }
     const subscription = yield subscription_model_1.Subscription.findOne({ userId }).sort({
         createdAt: -1,
     });
-    if (!subscription || !subscription.stripeCustomerId) {
-        throw new ApiErrors_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, "No active Stripe customer found for this account");
+    if (!subscription) {
+        throw new ApiErrors_1.default(http_status_codes_1.StatusCodes.NOT_FOUND, "No subscription history found for this account");
     }
+    const stripeCustomerId = yield resolveStripeCustomerId(stripe, user, subscription.stripeCustomerId);
     const clientUrl = config_1.default.client_url || "http://localhost:3000";
     const portalSession = yield stripe.billingPortal.sessions.create({
-        customer: subscription.stripeCustomerId,
+        customer: stripeCustomerId,
         return_url: `${clientUrl}/dashboard`,
     });
     return {
