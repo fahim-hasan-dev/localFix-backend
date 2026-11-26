@@ -25,7 +25,7 @@ app.use(Morgan.errorHandler);
 app.use(
   cors({
     origin: [
-      "http://10.10.26.182:3000",
+      "https://api.localhomefix.com",
       "http://10.10.26.182:3001",
       "http://10.10.26.182:3002",
       "http://localhost:3000",
